@@ -2,6 +2,7 @@ package dasturlash.uz.service;
 
 import dasturlash.uz.config.CustomUserDetails;
 import dasturlash.uz.dto.chat.ChatMessageDTO;
+import dasturlash.uz.dto.chat.ChatTypingDTO;
 import dasturlash.uz.entity.ChatMessageEntity;
 import dasturlash.uz.entity.ProfileEntity;
 import dasturlash.uz.enums.ChatType;
@@ -43,5 +44,10 @@ public class ChatSocketService {
 
     }
 
+    public void userTyping(String chatId, Principal principal) {
+        CustomUserDetails currentProfile = (CustomUserDetails) ((Authentication) principal).getPrincipal();
+        ProfileEntity receiver = profileService.getById(chatId);
+        messagingTemplate.convertAndSendToUser(receiver.getEmail(), "/queue/userTyping/", new ChatTypingDTO(currentProfile.getName(), currentProfile.getId()));
+    }
 
 }

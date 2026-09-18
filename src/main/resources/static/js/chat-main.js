@@ -267,6 +267,10 @@ function subscribeToUserQueues() {
     });
 
     // userTyping
+    stompClient.subscribe('/user/queue/userTyping/', (frame) => {
+        console.log('userTyping');
+        onUserTypingReceived(JSON.parse(frame.body));
+    });
 }
 
 /**
@@ -319,26 +323,6 @@ function onChatUpdateReceived(chatId, messageDto) {
         default:
             console.warn('Unknown socketMessageType:', messageDto.socketMessageType);
     }
-}
-
-/**
- * Shows "<name> is typing..." and hides it again after a short pause.
- *
- * @param {object} messageDto contains senderId and name
- */
-function onUserTypingReceived(messageDto) {
-    if (messageDto.senderId === currentProfileId) {
-        return;
-    }
-
-    typingUserSpan.innerText = `${messageDto.name} is typing...`;
-    typingIndicator.style.display = 'flex';
-
-    // Restart the timer on every signal, so the text stays while typing continues.
-    clearTimeout(typingIndicatorTimer);
-    typingIndicatorTimer = setTimeout(() => {
-        typingIndicator.style.display = 'none';
-    }, TYPING_INDICATOR_HIDE_MS);
 }
 
 /**
@@ -911,7 +895,7 @@ function onMessageInputKeydown(event) {
         return;
     }
     if (isTextKey(event)) {
-        // send typing signal
+        sendTypingSignal();
     }
 }
 
@@ -1118,6 +1102,48 @@ function markMessageAsRead(messageId) {
         return;
     }
     stompClient.send('/app/v1/chat.markMessageAsRead', {}, JSON.stringify({messageId: messageId}));
+}
+
+/* =============================================================================
+ * 13. TYPING INDICATOR
+ * ========================================================================== */
+
+/**
+ * Tells the other side that the user is typing.
+ * Sends at most one signal per TYPING_SIGNAL_INTERVAL_MS.
+ */
+function sendTypingSignal() {
+    if (!selectedChatId || !isSocketConnected()) {
+        return;
+    }
+
+    const now = performance.now();
+    if (now - lastTypingSentAt < TYPING_SIGNAL_INTERVAL_MS) {
+        return;
+    }
+    lastTypingSentAt = now;
+    console.log(' selectedChatId: ', selectedChatId);
+    stompClient.send(`/app/v1/chat.userTyping.${selectedChatId}`, {}, null);
+}
+
+/**
+ * Shows "<name> is typing..." and hides it again after a short pause.
+ *
+ * @param {object} messageDto contains senderId and name
+ */
+function onUserTypingReceived(messageDto) {
+    if (messageDto.typingChatId === currentProfileId) {
+        return;
+    }
+
+    typingUserSpan.innerText = `${messageDto.name} is typing...`;
+    typingIndicator.style.display = 'flex';
+
+    // Restart the timer on every signal, so the text stays while typing continues.
+    clearTimeout(typingIndicatorTimer);
+    typingIndicatorTimer = setTimeout(() => {
+        typingIndicator.style.display = 'none';
+    }, TYPING_INDICATOR_HIDE_MS);
 }
 
 
