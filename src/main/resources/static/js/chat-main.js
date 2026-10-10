@@ -1148,6 +1148,124 @@ function onUserTypingReceived(messageDto) {
 
 
 /* =============================================================================
+ * 14. ATTACHMENTS
+ * ========================================================================== */
+/**
+ * Shows the preview modal after the user picks a file.
+ * Called from the file input in the HTML.
+ *
+ * @param {Event} event
+ */
+function previewImage(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        // Real images are previewed; everything else gets a generic icon.
+        switch (getFileMessageType(file)) {
+            case 'PHOTO':
+                imagePreviewModalImg.src = reader.result;
+                break;
+            case 'VIDEO':
+            case 'AUDIO':
+                imagePreviewModalImg.src = './img/video-icon.png';
+                break;
+            default:
+                imagePreviewModalImg.src = './img/file-icon.png';
+        }
+        imagePreviewModalInput.focus();
+    };
+
+    reader.readAsDataURL(file);
+    imagePreviewModalOverlay.style.display = 'flex';
+}
+
+/** Closes the attachment preview modal and clears it. Called from the HTML. */
+function closeImagePreviewModal() {
+    imagePreviewModalOverlay.style.display = 'none';
+    imagePreviewModalImg.src = '';
+    imagePreviewModalInput.value = '';
+    document.getElementById('imageUpload').value = '';
+}
+
+/**
+ * Uploads the chosen file and sends it as a message.
+ * Called from the "Send" button of the preview modal.
+ */
+async function sendAttachMessage() {
+    const fileInput = document.getElementById('imageUpload');
+    const file = fileInput.files[0];
+    if (!file || !selectedChatId) {
+        return;
+    }
+
+    const caption = imagePreviewModalInput.value;
+    closeImagePreviewModal();
+
+    try {
+        const attach = await uploadFile(file);
+        if (!attach) {
+            return;
+        }
+
+        const savedMessage = await apiRequest('/api/v1/chat-message', {
+            method: 'POST',
+            body: JSON.stringify({
+                receiverId: selectedChatId,
+                chatMessageType: getFileMessageType(file),
+                capture: caption,
+                attachId: attach.id
+            })
+        });
+
+        if (savedMessage) {
+            renderMessages([savedMessage], 'beforeend');
+            scrollToBottom();
+        }
+    } catch (error) {
+        console.error('Could not send the attachment:', error);
+        alert('File was not sent. Please try again.');
+    }
+}
+
+/**
+ * Uploads a file to the server.
+ *
+ * @param {File} file
+ * @returns {Promise<object|null>} the saved attachment (id, url)
+ */
+function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiRequest('/api/v1/attach/upload', {method: 'POST', body: formData});
+}
+
+/**
+ * Maps the MIME type of a file to the message type the backend expects.
+ *
+ * @param {File} file
+ * @returns {string} 'PHOTO' | 'AUDIO' | 'VIDEO' | 'FILE'
+ */
+function getFileMessageType(file) {
+    if (!file || !file.type) {
+        return 'FILE';
+    }
+    if (file.type.startsWith('image/')) {
+        return 'PHOTO';
+    }
+    if (file.type.startsWith('audio/')) {
+        return 'AUDIO';
+    }
+    if (file.type.startsWith('video/')) {
+        return 'VIDEO';
+    }
+    return 'FILE';
+}
+
+/* =============================================================================
  * 16. SMALL HELPERS
  * ========================================================================== */
 
